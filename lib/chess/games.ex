@@ -8,14 +8,12 @@ defmodule Chess.Games do
 
   alias Chess.Games.Game
 
-  @topic "lobby"
-
-  def subscribe do
-    Phoenix.PubSub.subscribe(Chess.PubSub, @topic)
+  def subscribe_lobby do
+    Phoenix.PubSub.subscribe(Chess.PubSub, "lobby")
   end
 
-  defp broadcast({:ok, game}, event) do
-    Phoenix.PubSub.broadcast(Chess.PubSub, @topic, {event, game})
+  defp broadcast_lobby({:ok, game}, event) do
+    Phoenix.PubSub.broadcast(Chess.PubSub, "lobby", {event, game})
     {:ok, game}
   end
 
@@ -26,11 +24,21 @@ defmodule Chess.Games do
     |> Repo.all()
   end
 
+  def subscribe_to_game(game_id) do
+    Phoenix.PubSub.subscribe(Chess.PubSub, "game:#{game_id}")
+  end
+
+  def broadcast_to_game({:ok, game}, event) do
+    Phoenix.PubSub.broadcast(Chess.PubSub, "game:#{game.id}", {event, game})
+    {:ok, game}
+  end
+
   def join_game(%Game{} = game, player_id) do
     game
-    |> Game.join_changeset(%{black_player_id: player_id, status: "ongoing"})
+    |> Game.join_changeset(player_id)
     |> Repo.update()
-    |> broadcast(:game_joined)
+    |> broadcast_lobby(:game_joined)
+    |> broadcast_to_game(:game_joined)
   end
 
   @doc """
@@ -76,9 +84,9 @@ defmodule Chess.Games do
   """
   def create_game(attrs) do
     %Game{}
-    |> Game.changeset(attrs)
+    |> Game.create_changeset(attrs)
     |> Repo.insert()
-    |> broadcast(:game_created)
+    |> broadcast_lobby(:game_created)
   end
 
   @doc """
@@ -95,7 +103,7 @@ defmodule Chess.Games do
   """
   def update_game(%Game{} = game, attrs) do
     game
-    |> Game.changeset(attrs)
+    |> Game.create_changeset(attrs)
     |> Repo.update()
   end
 
@@ -125,7 +133,7 @@ defmodule Chess.Games do
 
   """
   def change_game(%Game{} = game, attrs \\ %{}) do
-    Game.changeset(game, attrs)
+    Game.create_changeset(game, attrs)
   end
 
   def finish_all_games do

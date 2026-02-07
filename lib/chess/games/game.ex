@@ -13,7 +13,7 @@ defmodule Chess.Games.Game do
   end
 
   @doc false
-  def changeset(game, attrs) do
+  def create_changeset(game, attrs) do
     game
     |> cast(attrs, [:status, :creator_name, :white_player_id, :black_player_id, :fen])
     |> validate_required([:status, :creator_name, :white_player_id])
