@@ -4,20 +4,20 @@ defmodule ChessWeb.LobbyLive do
   alias Chess.Games
 
   @impl true
-  def mount(_params, session, socket) do
+  def mount(_params, _session, socket) do
     if connected?(socket), do: Games.subscribe_lobby()
 
-    username = session["username"] || ""
+    user = socket.assigns.current_scope.user
 
-    if connected?(socket) and username != "" do
+    if connected?(socket) do
       Games.list_waiting_games()
-      |> Enum.filter(&(&1.creator_name == username))
+      |> Enum.filter(&(&1.white_player_id == to_string(user.id)))
       |> Enum.each(&Games.subscribe_to_game(&1.id))
     end
 
     socket =
       socket
-      |> assign(:username, username)
+      |> assign(:current_user, user)
       |> stream(:games, Games.list_waiting_games())
 
     {:ok, socket}
@@ -27,7 +27,7 @@ defmodule ChessWeb.LobbyLive do
     ~H"""
     <div id={@dom_id} class="flex items-center justify-between p-4 bg-white border rounded">
       <span class="text-black">{@game.creator_name} is waiting...</span>
-      <%= if @game.creator_name == @username do %>
+      <%= if @game.white_player_id == to_string(@current_user.id) do %>
         <button
           phx-click="cancel_game"
           phx-value-id={@game.id}
@@ -57,18 +57,9 @@ defmodule ChessWeb.LobbyLive do
       <h1 class="text-2xl font-bold mb-6">Chess Lobby</h1>
 
       <div class="mb-6 flex items-center gap-4">
-        <input
-          type="text"
-          placeholder="Enter your username"
-          value={@username}
-          phx-blur="set_username"
-          phx-keyup="set_username"
-          class="px-3 py-2 border rounded text-black"
-        />
         <button
           phx-click="create_game"
-          disabled={@username == ""}
-          class="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-4 py-2 bg-blue-600 text-white rounded"
         >
           Create Game
         </button>
@@ -85,7 +76,7 @@ defmodule ChessWeb.LobbyLive do
           :for={{dom_id, game} <- @streams.games}
           game={game}
           dom_id={dom_id}
-          username={@username}
+          current_user={@current_user}
         />
       </div>
     </div>
@@ -93,19 +84,16 @@ defmodule ChessWeb.LobbyLive do
   end
 
   @impl true
-  def handle_event("set_username", %{"value" => username}, socket) do
-    Games.list_waiting_games()
-    |> Enum.filter(&(&1.creator_name == username))
-    |> Enum.each(&Games.subscribe_to_game(&1.id))
-
-    {:noreply, assign(socket, :username, username)}
-  end
-
-  @impl true
   def handle_event("create_game", _params, socket) do
-    username = socket.assigns.username
+    user = socket.assigns.current_user
 
-    case Games.create_game(%{creator_name: username, status: "waiting", white_player_id: "temp"}) do
+    attrs = %{
+      creator_name: user.email,
+      status: "waiting",
+      white_player_id: to_string(user.id)
+    }
+
+    case Games.create_game(attrs) do
       {:ok, game} ->
         Games.subscribe_to_game(game.id)
         {:noreply, socket}
@@ -117,18 +105,14 @@ defmodule ChessWeb.LobbyLive do
 
   @impl true
   def handle_event("join_game", %{"id" => game_id}, socket) do
-    username = socket.assigns.username
+    user = socket.assigns.current_user
 
-    if username == "" do
-      {:noreply, put_flash(socket, :error, "Please enter a username first")}
-    else
-      case Games.get_game!(game_id) |> Games.join_game(username) do
-        {:ok, _game} ->
-          {:noreply, push_navigate(socket, to: "/games/#{game_id}")}
+    case Games.get_game!(game_id) |> Games.join_game(to_string(user.id)) do
+      {:ok, _game} ->
+        {:noreply, push_navigate(socket, to: "/games/#{game_id}")}
 
-        {:error, _} ->
-          {:noreply, put_flash(socket, :error, "Could not join game")}
-      end
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not join game")}
     end
   end
 
@@ -151,11 +135,13 @@ defmodule ChessWeb.LobbyLive do
   end
 
   @impl true
+  # msg from game pubsub
   def handle_info({:game_joined, game_id, _game}, socket) do
     {:noreply, push_navigate(socket, to: "/games/#{game_id}")}
   end
 
   @impl true
+  # msg from lobby pubsub
   def handle_info({:game_joined, game}, socket) do
     {:noreply, stream_delete(socket, :games, game)}
   end
