@@ -28,12 +28,12 @@ defmodule Chess.Games do
     Phoenix.PubSub.subscribe(Chess.PubSub, "game:#{game_id}")
   end
 
-  def broadcast_to_game({:ok, game}, event) do
-    Phoenix.PubSub.broadcast(Chess.PubSub, "game:#{game.id}", {event, game})
+  def broadcast_to_game({:ok, %Game{} = game}, event) do
+    Phoenix.PubSub.broadcast(Chess.PubSub, "game:#{game.id}", {event, game.id, game})
     {:ok, game}
   end
 
-  def join_game(%Game{} = game, player_id) do
+  def join_game(%Game{status: "waiting"} = game, player_id) do
     game
     |> Game.join_changeset(player_id)
     |> Repo.update()
@@ -121,6 +121,7 @@ defmodule Chess.Games do
   """
   def delete_game(%Game{} = game) do
     Repo.delete(game)
+    |> broadcast_lobby(:game_cancelled)
   end
 
   @doc """

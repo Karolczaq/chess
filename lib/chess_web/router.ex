@@ -17,7 +17,9 @@ defmodule ChessWeb.Router do
   scope "/", ChessWeb do
     pipe_through :browser
 
+    post "/session/username", SessionController, :set_username
     live "/", LobbyLive
+    live "/games/:id", GameLive
   end
 
   # Other scopes may use custom stacks.
