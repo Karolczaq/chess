@@ -34,11 +34,11 @@ defmodule Chess.Games do
   end
 
   def join_game(%Game{status: "waiting"} = game, player_id) do
-    game
-    |> Game.join_changeset(player_id)
-    |> Repo.update()
-    |> broadcast_lobby(:game_joined)
-    |> broadcast_to_game(:game_joined)
+    with {:ok, game} <- game |> Game.join_changeset(player_id) |> Repo.update(),
+         {:ok, _pid} <- Chess.GameServer.start_game(game.id) do
+      broadcast_lobby({:ok, game}, :game_joined)
+      broadcast_to_game({:ok, game}, :game_joined)
+    end
   end
 
   @doc """

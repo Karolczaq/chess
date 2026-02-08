@@ -111,7 +111,8 @@ defmodule ChessWeb.LobbyLive do
       {:ok, _game} ->
         {:noreply, push_navigate(socket, to: "/games/#{game_id}")}
 
-      {:error, _} ->
+      {:error, message} ->
+        dbg(message)
         {:noreply, put_flash(socket, :error, "Could not join game")}
     end
   end
