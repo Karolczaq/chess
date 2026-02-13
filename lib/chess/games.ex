@@ -17,6 +17,8 @@ defmodule Chess.Games do
     {:ok, game}
   end
 
+  defp broadcast_lobby({:error, _} = error, _event), do: error
+
   def list_waiting_games do
     Game
     |> where(status: "waiting")
